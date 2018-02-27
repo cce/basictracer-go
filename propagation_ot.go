@@ -2,6 +2,7 @@ package basictracer
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 	"io"
 	"strconv"
 	"strings"
@@ -40,8 +41,8 @@ func (p *textMapPropagator) Inject(
 	if !ok {
 		return opentracing.ErrInvalidCarrier
 	}
-	carrier.Set(fieldNameTraceID, strconv.FormatUint(sc.TraceID, 16))
-	carrier.Set(fieldNameSpanID, strconv.FormatUint(sc.SpanID, 16))
+	carrier.Set(fieldNameTraceID, hex.EncodeToString(sc.TraceID[:]))
+	carrier.Set(fieldNameSpanID, hex.EncodeToString(sc.SpanID[:]))
 	carrier.Set(fieldNameSampled, strconv.FormatBool(sc.Sampled))
 
 	for k, v := range sc.Baggage {
@@ -58,22 +59,25 @@ func (p *textMapPropagator) Extract(
 		return nil, opentracing.ErrInvalidCarrier
 	}
 	requiredFieldCount := 0
-	var traceID, spanID uint64
+	var traceID TraceID
+	var spanID SpanID
 	var sampled bool
 	var err error
 	decodedBaggage := make(map[string]string)
 	err = carrier.ForeachKey(func(k, v string) error {
 		switch strings.ToLower(k) {
 		case fieldNameTraceID:
-			traceID, err = strconv.ParseUint(v, 16, 64)
-			if err != nil {
+			tid, err := hex.DecodeString(v)
+			if err != nil || len(tid) > 16 {
 				return opentracing.ErrSpanContextCorrupted
 			}
+			copy(traceID[:], tid)
 		case fieldNameSpanID:
-			spanID, err = strconv.ParseUint(v, 16, 64)
-			if err != nil {
+			sid, err := hex.DecodeString(v)
+			if err != nil || len(sid) > 8 {
 				return opentracing.ErrSpanContextCorrupted
 			}
+			copy(spanID[:], sid)
 		case fieldNameSampled:
 			sampled, err = strconv.ParseBool(v)
 			if err != nil {

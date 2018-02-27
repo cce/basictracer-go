@@ -107,6 +107,7 @@ func NewWithOptions(opts Options) opentracing.Tracer {
 	rval := &tracerImpl{options: opts}
 	rval.textPropagator = &textMapPropagator{rval}
 	rval.binaryPropagator = &binaryPropagator{rval}
+	rval.httpPropagator = &traceContextPropagator{rval}
 	rval.accessorPropagator = &accessorPropagator{rval}
 	return rval
 }
@@ -126,6 +127,7 @@ type tracerImpl struct {
 	options            Options
 	textPropagator     *textMapPropagator
 	binaryPropagator   *binaryPropagator
+	httpPropagator     *traceContextPropagator
 	accessorPropagator *accessorPropagator
 }
 
@@ -233,7 +235,9 @@ var Delegator delegatorType
 
 func (t *tracerImpl) Inject(sc opentracing.SpanContext, format interface{}, carrier interface{}) error {
 	switch format {
-	case opentracing.TextMap, opentracing.HTTPHeaders:
+	case opentracing.HTTPHeaders:
+		return t.httpPropagator.Inject(sc, carrier)
+	case opentracing.TextMap:
 		return t.textPropagator.Inject(sc, carrier)
 	case opentracing.Binary:
 		return t.binaryPropagator.Inject(sc, carrier)
@@ -246,7 +250,9 @@ func (t *tracerImpl) Inject(sc opentracing.SpanContext, format interface{}, carr
 
 func (t *tracerImpl) Extract(format interface{}, carrier interface{}) (opentracing.SpanContext, error) {
 	switch format {
-	case opentracing.TextMap, opentracing.HTTPHeaders:
+	case opentracing.HTTPHeaders:
+		return t.httpPropagator.Extract(carrier)
+	case opentracing.TextMap:
 		return t.textPropagator.Extract(carrier)
 	case opentracing.Binary:
 		return t.binaryPropagator.Extract(carrier)
